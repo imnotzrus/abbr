@@ -66,6 +66,7 @@ ab gis                       # equivalents to `git status`
    <details>
    <summary>Android</summary>
 
+   > Run this command in your terminal:
    > ```sh
    > curl -sS https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | bash
    > ```
