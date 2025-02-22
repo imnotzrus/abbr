@@ -1,0 +1,63 @@
+{%- let section = "# =============================================================================\n#" -%}
+{%- let not_configured = "# -- not configured --" -%}
+
+# shellcheck shell=bash
+
+{{ section }}
+__abbreviator_s_prefix='abbr#'
+
+function __abbreviator_s() {
+    \builtin local result
+    # shellcheck disable=SC2312
+    result=`\command abbr query "$@"` &&
+        eval "$result"
+}
+
+{{ section }}
+
+{%- match cmd %}
+{%- when Some with (cmd) %}
+
+\builtin unalias {{cmd}} &>/dev/null || \builtin true
+function {{cmd}}() {
+    __abbreviator_s "$@"
+}
+
+# Load completions.
+# - Bash 4.4+ is required to use `@Q`.
+# - Completions require line editing. Since Bash supports only two modes of
+#   line editing (`vim` and `emacs`), we check if either them is enabled.
+# - Completions don't work on `dumb` terminals.
+if [[ ${BASH_VERSINFO[0]:-0} -eq 4 && ${BASH_VERSINFO[1]:-0} -ge 4 || ${BASH_VERSINFO[0]:-0} -ge 5 ]] &&
+    [[ :"${SHELLOPTS}": =~ :(vi|emacs): && ${TERM} != 'dumb' ]]; then
+    # Use `printf '\e[5n'` to redraw line after fzf closes.
+    \builtin bind '"\e[0n": redraw-current-line' &>/dev/null
+
+    function __abbreviator_s_complete() {
+        # Only show completions when the cursor is at the end of the line.
+        [[ {{ "${#COMP_WORDS[@]}" }} -eq $((COMP_CWORD + 1)) ]] || return
+
+        # If there is a space after the last word, use interactive selection.
+        if [[ -z ${COMP_WORDS[-1]} ]] && [[ ${COMP_WORDS[-2]} != "${__abbreviator_s_prefix}"?* ]]; then
+            \builtin local result
+            # shellcheck disable=SC2312
+            result="$(\command abbr query "{{ "${COMP_WORDS[@]:1:${#COMP_WORDS[@]}-2}" }}")" &&
+                COMPREPLY=("${__abbreviator_s_prefix}${result}/")
+            \builtin printf '\e[5n'
+        fi
+    }
+
+    \builtin complete -F __abbreviator_s_complete -o filenames -- {{cmd}}
+    \builtin complete -r {{cmd}}i &>/dev/null || \builtin true
+fi
+
+{%- when None %}
+
+{{ not_configured }}
+
+{%- endmatch %}
+
+{{ section }}
+# To initialize abbreviator, add this to your configuration (usually ~/.bashrc):
+#
+# eval "$(abbr init bash)"

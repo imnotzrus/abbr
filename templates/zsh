@@ -1,0 +1,79 @@
+{%- let section = "# =============================================================================\n#" -%}
+{%- let not_configured = "# -- not configured --" -%}
+
+# shellcheck shell=bash
+
+{{ section }}
+
+function __abbreviator_s() {
+    \builtin local result
+    # shellcheck disable=SC2312
+    result=`\command abbr query "$@"` &&
+        eval "$result"
+}
+
+{{ section }}
+
+{%- match cmd %}
+{%- when Some with (cmd) %}
+
+function {{ cmd }}() {
+    __abbreviator_s "$@"
+}
+
+{%- when None %}
+
+{{ not_configured }}
+
+{%- endmatch %}
+
+# Completions.
+if [[ -o zle ]]; then
+    __abbreviator_result=''
+
+    function __abbreviator_s_complete() {
+        # Only show completions when the cursor is at the end of the line.
+        # shellcheck disable=SC2154
+        [[ "{{ "${#words[@]}" }}" -eq "${CURRENT}" ]] || return 0
+
+        if [[ "${words[-1]}" == '' ]]; then
+            # Show completions for Space-Tab.
+            # shellcheck disable=SC2086
+            __abbreviator_result="$(\command abbr query ${words[2,-1]})" || __abbreviator_result=''
+
+            # Set a result to ensure completion doesn't re-run
+            compadd -Q ""
+
+            # Bind '\e[0n' to helper function.
+            \builtin bindkey '\e[0n' '__abbreviator_s_complete_helper'
+            # Sends query device status code, which results in a '\e[0n' being sent to console input.
+            \builtin printf '\e[5n'
+
+            # Report that the completion was successful, so that we don't fall back
+            # to another completion function.
+            return 0
+        fi
+    }
+
+    function __abbreviator_s_complete_helper() {
+        if [[ -n "${__abbreviator_result}" ]]; then
+            # shellcheck disable=SC2034,SC2296
+            BUFFER="{{ cmd.unwrap_or("s") }} ${(q-)__abbreviator_result}"
+            __abbreviator_result=''
+            \builtin zle reset-prompt
+            \builtin zle accept-line
+        else
+            \builtin zle reset-prompt
+        fi
+    }
+    \builtin zle -N __abbreviator_s_complete_helper
+{%- if let Some(cmd) = cmd %}
+
+    [[ "${+functions[compdef]}" -ne 0 ]] && \compdef __abbreviator_s_complete {{ cmd }}
+{%- endif %}
+fi
+
+{{ section }}
+# To initialize abbreviator, add this to your configuration (usually ~/.zshrc):
+#
+# eval "$(abbr init zsh)"

@@ -1,0 +1,7 @@
+# IDE
+.idea
+.code
+
+# Code base
+/target
+Cargo.lock
